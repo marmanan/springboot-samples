@@ -1,0 +1,54 @@
+darwin:
+  app-key: darwin
+  logging:
+    system: sys
+    subsystem: subsys
+    application: app
+    subapplication: subapp
+    paas-app-version: "@project.version@"
+    kafka:
+      server: ${env.logging-server}
+  security:
+    pkm-endpoint:
+      - ${env.pkm-endpoint}
+    sts-endpoint:
+      - ${env.sts-endpoint}
+    white-list:
+      - /actuator/health
+      - /v1/**
+      - /swagger-ui.html/**
+      - /customPath-api-docs/**
+
+#Activated cache caffeine by default with expireAfterWrite=10 minutes (Specifies that each entry should be automatically removed from the cache once a fixed duration has elapsed after the entry’s creation)
+#If you want to change the cache to JBoss DataGrid, check the documentacion in confluence
+spring:
+  cache:
+    type: caffeine
+    caffeine:
+      spec: expireAfterWrite=10m
+  session:
+    store-type: none
+
+  security:
+    user:
+      name: admin
+      password: s3cr3t
+
+management.endpoint:
+  health:
+    show-details: WHEN_AUTHORIZED
+
+logging.level:
+  es.santander.darwin.reactivecontroller: INFO
+  root: ERROR
+
+health:
+  config:
+    enabled: false
+
+springdoc:
+  version: '@version@'
+  # /api-docs endpoint custom path
+  api-docs:
+    path: /customPath-api-docs
+

@@ -1,0 +1,12 @@
+darwin:
+  region: boae
+  suffix:
+spring:
+  application:
+    name: reactivecontroller
+  profiles:
+    active: local
+  cloud:
+    config:
+      uri: http://configuration-service${darwin.suffix}:8080/
+      fail-fast: false

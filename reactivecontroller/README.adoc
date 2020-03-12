@@ -1,0 +1,497 @@
+:doctype: book
+:sectnums:
+= Construcción de un controlador web con Spring Web Reactive
+:toc:
+:toclevels: 3
+:toc-title: Índice
+
+:icons: font
+:figure-caption!:
+:imagesdir: images/
+
+:guide-darwin-controllers: link:https://documentacion-san-narq-ref-dev.appls.boaw.paas.gsnetcloud.corp/welcome-pack.html#10_capa_de_servicios[Guía de referencia de microservicios Spring Darwin]
+:spring-requestmapping: link:https://www.baeldung.com/spring-requestmapping
+:quick-guide-spring-controllers: link:https://www.baeldung.com/spring-controllers[Quick Guide to Spring Controllers]
+:github-samples-webcontroller: link:https://github.cloudcenterproduban.eu-de.bluemix.net/SANES-DARWIN-POC/darwin-samples/tree/develop/webcontroller[GitHub]
+:guide-darwin-archetype: link:../archetype/README.adoc[Arquetipo de microservicios]
+:gestion_rutas_dominios_darwin: link:https://confluence.ci.gsnet.corp/pages/viewpage.action?pageId=176131882[Gestión de rutas y dominios en aplicaciones Darwin]
+:programacion-reactiva: link:https://confluence.ci.gsnet.corp/pages/viewpage.action?pageId=169579048[Introducción a la programación reactiva]
+
+== Introducción
+
+La exposición de servicios REST en Spring se basa en el uso de controladores definidos en Spring WebFlux. Spring WebFlux forma parte de Spring Framework, y se centra en la construcción de la interfaz de usuario.
+
+== Creando un microservicio Reactivo
+
+Para poder trabajar con un controlador web reactivo, en primer lugar, debemos crearnos un microservicio reactivo; para ello, utilizamos el arquetipo proporcionado por *Darwin Spring* e incluimos las librerías necesarias. Para ello, haciendo uso de la línea de comandos, debemos situarnos en el directorio donde queremos crear el nuevo microservicio y ejecutar el siguiente comando:
+
+----
+mvn archetype:generate -DarchetypeGroupId=es.santander.darwin -DarchetypeArtifactId=darwin-spring-boot-archetype-microservice -DarchetypeVersion=2.4.3-RELEASE
+----
+
+WARNING: Es importante ejecutar siempre la última versión del arquetipo. En este ejemplo la última versión es 2.4.3-RELEASE.
+
+Como lo que queremos es crear un controlador web reactivo, durante la ejecución del arquetipo nos hará la pregunta de si queremos crear un micro reactivo,  y debemos responder "Y" e igualmente debemos responder "Y" a la pregunta si queremos usar *webclient-component*.
+
+[source, xml]
+----
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-webflux</artifactId>
+</dependency>
+----
+
+TIP: Para más información sobre la creación de microservicios usando el arquetipo de Darwin, pueden consultar la guía *{guide-darwin-archetype}*.
+
+== Desarrollando la capa controlador
+
+Si queremos exponer los servicios de nuestra aplicación debemos implementar una de las capas de más alto nivel, *los controladores*.
+
+Todas las solicitudes HTTP son manejadas por un controlador, para ello, Spring identifica fácilmente estas solicitudes mediante la anotación *_@RestController_*. Esta anotación, permite a Spring indicarle que se trata de clase controlador de un microservicio REST.
+
+[[RestController, @RestController]]
+La anotación *_@RestController_* en Spring Web Reactive no es más que una combinación de la anotación *@Controller* y *@ResponseBody*. Se agregó a Spring 4.0 para facilitar el desarrollo de los servicios web RESTful en Spring Framework.
+
+[source, java]
+----
+@RestController
+@RequestMapping("/v1/client")
+public class RestControllerReactive {
+
+	@RequestMapping(value="/all", method = RequestMethod.GET)
+	public Mono<String> getAllClients() {
+		return Mono.just("Get all clients");
+	}
+}
+----
+
+Como podemos ver en el ejemplo, además de la anotación *_@RestController_*, se utilizan otras anotaciones necesarias para establecer las rutas y los métodos que deben utilizar en las peticiones, estas pueden ser a nivel de clase o a nivel de método.
+
+WARNING: Es importante reseñar que diferencia entre un Controlador Reactivo (Spring WebFlux) y con Controlador MVC (Spring Web MVC), es que un Controlador Reactivo debe devolver siempre un Mono o Flux. Además, es muy importante que todo el flujo de tratamiento de la petición sea implementado de modo no bloqueante. Para más información puede consultar la documentación disponible en confluence: {programacion-reactiva}.
+
+TIP: Para más información puede consultar la {guide-darwin-controllers}
+
+=== Anotaciones básicas de un controlador
+
+==== @RequestMapping
+
+Esta anotación se emplea para definir las URLs de las peticiones entrantes que será procesadas por el controlador y se puede aplicar a nivel de clase y/o de método.
+
+[source, java]
+----
+@RestController
+@RequestMapping("/v1/client")
+public class RestControllerReactive {
+
+	@RequestMapping(value="/all", method = RequestMethod.GET)
+	public Mono<String> getAllClients() {
+		return Mono.just("Get all clients");
+	}
+}
+----
+
+===== @RequestMapping con HTTP Method
+
+La anotación @RequestMapping es capaz de manejar los métodos HTTP, como por ejemplo GET, PUT, POST, DELETE y PATCH. Por defecto, si no se especifica nada, se asume que todas las request son de tipo GET.
+
+Para definir una request mapping con un método HTTP específico, se debe declarar el método HTTP en *@RequestMapping* de la siguiente manera.
+
+[source, java]
+----
+@RestController
+@RequestMapping("/v1/client")
+public class RestControllerReactive {
+
+	@RequestMapping(value="/all", method = RequestMethod.GET)
+	public Mono<String> getAllClients() {
+		return Mono.just("Get all clients");
+	}
+
+	@RequestMapping(value="/all", method = RequestMethod.POST)
+	public Mono<String> postAllClients() {
+		return Mono.just("Post all clients");
+	}
+}
+----
+===== @RequestMapping y HTTP Headers
+
+También permite especificar cabeceras HTTP.
+
+[source, java]
+----
+@RestController
+@RequestMapping("/v1/client")
+public class RestControllerReactive {
+
+	@RequestMapping(value="/all", method = RequestMethod.GET, headers = {"Session-Id=sessionId"})
+	public Mono<String> getAllClientsWithHeaders(@RequestHeader("Session-Id") String sessionId) { <1>
+		return Mono.just("Get all client with Headers: " + sessionId);
+	}
+}
+----
+
+<1> Haciendo uso de la anotación @RequestHeader se puede recuperar la cabecera que enviamos en la request.
+
+==== @PathVariable
+
+La anotación @PathVariable usada con @RequestMapping nos permite mapear parte de la request a un parámetro del método del controlador.
+
+Esta anotación, se puede usar con o sin valor. El valor especifica el nombre de la request que debe asignarse al parámetro del método.
+
+[source]
+----
+curl http://localhost:8080/v1/client/Peter
+----
+
+[source, java]
+----
+@RestController
+@RequestMapping("/v1/client")
+public class RestControllerReactive {
+
+	@RequestMapping(value = "/{name}", method = RequestMethod.GET)
+	public Mono<String> getClientByName(@PathVariable("name") String name){
+		return Mono.just("Get client with name=" + name);
+	}
+}
+----
+
+<1> El *"name"* del parámetro de la request se asignará al parámetro *"name"* del método getClientByName().
+
+TIP: Es posible mapear múltiples partes de la request con diferentes parámetros. Para más información puedes consultar la documentación de Spring: {spring-requestmapping}#path-variable[RequestMapping with Path Variables]
+
+==== @RequestParam
+
+La anotación @RequestParam usada con @RequestMapping permite fácilmente mapear parámetros de la request a parámetros del método del controlador.
+
+[source]
+----
+curl http://localhost:8080/v1/client?id=1
+----
+
+[source, java]
+----
+@RestController
+@RequestMapping("/v1/client")
+public class RestControllerReactive {
+
+	@RequestMapping(method = RequestMethod.GET)
+	public Mono<String> getClientById(@RequestParam("id") String id){
+		return Mono.just("Get client with id=" + id);
+	}
+}
+----
+
+TIP: Para más información puedes consultar la documentación de Spring: {spring-requestmapping}#request-param[RequestMapping with Request Parameters]
+
+==== Nuevos @RequestMapping Shortcuts
+
+Spring 4.3 introdujo variantes a nivel de método, también conocidas como anotaciones compuestas de *@RequestMapping*. Las anotaciones compuestas, expresan mejor la semántica de los métodos anotados. Actúan como un envoltorio para *@RequestMapping* y se han convertido en las formas estándar de definir los *endpoints*.
+
+[source, java]
+----
+@RestController
+@RequestMapping("/v1/client")
+public class RestControllerReactive {
+
+	@PutMapping("/{id}/{name}")
+	public Mono<String> newClient(@PathVariable String id, @PathVariable String name){
+		return Mono.just("New client with id=" + id + " and name=" + name);
+	}
+
+	@DeleteMapping("/{id}")
+	public Mono<String> deleteClient(@PathVariable String id){
+		return Mono.just("Delete client with id=" + id);
+	}
+
+	@GetMapping("/newClients")
+	public Flux<Client> getNewClients() {
+		return clientsRepository.findAllClients();
+	}
+}
+----
+
+TIP: Para más información puedes consultar la documentación de Spring: {spring-requestmapping}#new-request-mapping-shortcuts[New Request Mapping Shortcuts]
+
+=== Versionado de APIs
+
+Es importante mantener un control de las versiones del API para que exista una retrocompatibilidad. De esta forma sean accesibles las versiones antiguas del API, con las versiones nuevas. Para ello, se aconseja que el path del api se establezca de la siguiente manera:
+
+.../[red]#{version}#/[blue]#{api-id}#/[green]#{path_to_resource}#
+
+* *_[red]#{version}#:_* versión del api
+* *_[blue]#{api-id}#:_* identifica el api entre todas las expuestas en un Gateway
+* *_[green]#{path_to_resource}#:_* resto del path al recurso del api a invocar
+
+TIP: Para más información puede consultar la documentación disponible en confluence sobre {gestion_rutas_dominios_darwin} o la {guide-darwin-controllers}.
+
+
+== SpringDoc-OpenAPI: Documenta por nosotros
+
+Cada día publicamos un mayor número de APIs y lo lógico es que publiquemos una documentación clara de como trabajar con ellas. SpringDoc es una herramienta que simplifica la generación y nos permite documentar de una forma sencilla nuestras APIs, basado en la especificación link:https://github.com/OAI/OpenAPI-Specification[OpenAPI 3], para las aplicaciones Spring Boot 1.x y 2.x.
+
+SpringDoc-openAPI se puede integrar con link:https://swagger.io/tools/swagger-ui/[Swagger UI], permite que los desarrolladores finales visualicen, interactúen sin esfuerzo y prueben cada operación que su API expone para un consumo fácil.
+
+NOTE: Para más información consultar los siguientes enlaces, link:https://www.openapis.org/[OpenAPI] y link:https://springdoc.github.io/springdoc-openapi-demos/[SpringDoc-openAPI]
+
+=== Requisitos previos
+
+Como requisito previo es necesario incluir la siguiente dependencia Maven en el pom.xml.
+
+[source, xml]
+----
+ <dependency>
+    <groupId>org.springdoc</groupId>
+    <artifactId>springdoc-openapi-webflux-ui</artifactId>
+    <version>1.2.18</version>
+</dependency>
+----
+
+=== Configuración de SpringDoc
+
+Veamos los pasos a seguir:
+
+* _Paso 1_: Definir una instancia OpenAPI
+
+Normalmente se usa para agregar la sección Información o cualquier otro metadato.
+
+[source, java]
+----
+  @Bean
+    public OpenAPI customOpenAPI(@Value("${springdoc.version}") String appVersion) {
+        return new OpenAPI()
+                .components(new Components().addSecuritySchemes("BearerAuth",
+                        new SecurityScheme().type(SecurityScheme.Type.HTTP).scheme("bearer").bearerFormat("JWT")))
+                .info(new Info().title("Reactive Controller").version(appVersion));
+    }
+----
+
+<1> components: elemento para contener varios esquemas para la especificación. En este caso la definición de un esquema de seguridad, "BearerAuth" (este nombre es arbitrario), se puede aplicar de manera global o de manera individual a operaciones.
+<3> type: tipo de esquema de seguridad.
+<4> scheme: el nombre del esquema de Autorización HTTP que se utilizará. Por ejemplo, Basic, Bearer, ...
+<5> info: proporciona metadatos sobre la API.Se incluye información como título, versión, licencia, etc...Que se mostrará en la documentación generada.
+
+A modo de ejemplo hemos aplicado seguridad a una operación de la siguiente manera:
+----
+security = {@SecurityRequirement(name= "BearerAuth")}
+----
+[source, java]
+----
+@Operation(summary = "Find all New Clients", description = "Find all New Clients of the day", security = {@SecurityRequirement(name= "BearerAuth")})
+	@GetMapping("/newClients")
+	public Flux<Client> getNewClients() {
+		return clientsRepository.findAllClients();
+	}
+----
+
+Como podemos ver, se muestra un candado indicando esta configuración de seguridad.
+
+image::Springdoc-security.PNG[]
+
+
+TIP: Puedes ampliar información en los siqguientes enlaces. link:https://swagger.io/docs/specification/authentication/[Authentication],
+link:https://swagger.io/docs/specification/authentication/bearer-authentication/[Bearer Authentication].
+
+--
+[[config, Propiedades]]
+* _Paso 2_ : Podemos, opcionalmente, personalizar el 'path' de la documentación, agregamos una propiedad *springdoc*, _api-docs:
+path_, en nuestro archivo de propiedades de la siguiente manera.
+
+[source, yml]
+----
+springdoc:
+  version: '@version@'
+  api-docs:
+    path: /customPath-api-docs
+----
+
+* _Paso 3_ : En el caso de que se haga uso de la librería de seguridad debemos tener en cuenta que las URLs se deben añadir a la whitelist.
+
+[source,yaml]
+----
+darwin:
+ security:
+  white-list:
+      - /swagger-ui.html/**
+      - /customPath-api-docs/**
+----
+
+--
+
+==== Anotaciones
+
+El uso de algunas anotaciones puede proporcionarnos un extra de información en la documentación que se genera. A continuación mostramos algunas.
+
+[width="100%",cols="15%,30%, 30%",options="header",]
+|=================================================
+|Nombre |Descripción |Ejemplo
+
+|@Tag
+|Etiqueta el controlador
+|@Tag(name = "Clients", description = "the Clients API")
+
+|@Operation
+|Documenta cada método del servicio
+|@Operation(summary = "Find Contacts by name", description = "Name search by %name% format", tags = { "contact" })
+
+|@Parameter
+|Documenta los parámetros
+|@Parameter(description="name of the client to be update. Cannot be empty.",required=true)
+
+|@ApiResponses
+|Documenta las posibles respuestas del método, con mensaje explicativo
+| @ApiResponses({
+@ApiResponse(code = 200, message = "Deleted user")
+})
+
+|=================================================
+
+Por ejemplo:
+
+[source,java]
+----
+@Operation(summary = "Find all Clients", description = "Find all Clients from LDAP")
+	@ApiResponses(value = {
+			@ApiResponse(responseCode = "200", description = "successful operation",
+					content = @Content(array = @ArraySchema(schema = @Schema(implementation = String.class)))) })
+	@RequestMapping(value="/all", method = RequestMethod.GET)
+	public Mono<String> getAllClients() {
+		return Mono.just("Get all clients");
+	}
+----
+
+=== SpringDoc y la documentación generada
+
+Arrancamos la aplicación y podemos consultar las siguientes URLs.
+
+* http://localhost:8080/v3/api-docs
+
+NOTE: Hay que tener en cuenta si hemos definido la propiedad _springdoc.api-docs.path_ en nuestro archivo de propiedades. Consultar configuración de <<Propiedades>>
+
+En este caso de ejemplo, la ruta sería http://localhost:8080/customPath-api-docs.
+
+image::Springdoc.png[]
+
+En principio es una información que nos puede parecer extraña. Es suficiente abrirla con un visor de JSON para que la información nos quede mucho más clara:
+
+image::Springdocjson.png[]
+
+Podemos ver claramente la definición de la operación y el tipo de objeto que devuelve, así como información adicional.
+
+* http://localhost:8080/swagger-ui.html
+
+La biblioteca _springdoc-openapi-webflux_ implementa automáticamente Swagger UI, por lo que tenemos disponible una vista web de la documentación. Estará disponible en http://localhost:8080/swagger-ui.html y nos redirigirá, en este ejemplo, a http://localhost:8080/webjars/swagger-ui/index.html?url=/customPath-api-docs&validatorUrl=.
+
+image::SpringdocUI.png[]
+
+En este punto, podemos hacer clic sobre sobre la documentación generada y probar las operaciones de dicho API. Si quieres probar una operación, es tan sencillo como hacer clic en el botón Try it out!.
+
+image::Springdoc-execute.png[]
+
+Acabamos de documentar nuestra API con Swagger.
+
+== Testeando el Controlador
+
+La autoevaluación del trabajo es una responsabilidad del equipo. La implementación y ejecución de casos de prueba forma parte del trabajo diario de cada equipo, pues es necesario para garantizar la calidad del producto final.
+
+Actualmente hay muchos frameworks de pruebas, usaremos JUnit 5, actualmente se trata de un conjunto de tres subproyectos: JUnit Platform, JUnit Jupiter y JUnit Vintage.
+
+Como requisito previo es necesario incluir las dependencias Maven de Spring Test y JUnit 5 en el pom.xml, respectivamente.
+
+[source,xml]
+----
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-test</artifactId>
+    <scope>test</scope>
+</dependency>
+
+----
+
+[source, xml]
+----
+<dependency>
+	<groupId>org.junit.jupiter</groupId>
+	<artifactId>junit-jupiter</artifactId>
+	<scope>test</scope>
+</dependency>
+<dependency>
+	<groupId>org.junit.platform</groupId>
+	<artifactId>junit-platform-launcher</artifactId>
+	<scope>test</scope>
+</dependency>
+
+<!-- Enables any legacy JUnit 3 and JUnit 4 tests you may have. Not needed for JUnit 5 tests. -->
+<dependency>
+	<groupId>org.junit.vintage</groupId>
+	<artifactId>junit-vintage-engine</artifactId>
+	<scope>test</scope>
+</dependency>
+----
+
+TIP: Estas dependencias ya se incluyen al generar un microservicio haciendo uso del arquetipo Darwin.
+
+=== @SpringBootTest
+
+Esta anotación realiza una búsqueda de la configuración principal y la usa para iniciar el contexto de la aplicación.
+
+[source, java]
+----
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@AutoConfigureWebTestClient
+class RestControllerReactiveTest {
+
+    @Autowired
+    private WebTestClient testClient;
+
+    @Test
+    void getAllClientsTest() {
+        testClient.get().uri("/v1/client/all")
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody(String.class).isEqualTo("Get all clients");
+    }
+----
+
+NOTE: El uso de _WebEnvironment.RANDOM_PORT_ arranca el servidor en un puerto aleatorio.
+
+Spring nos facilita link:https://github.cloudcenterproduban.eu-de.bluemix.net/SANES-DARWIN-POC/darwin-samples/tree/develop/webclient#webtestclient[_WebTestClient_], para verificar el estado de las respuestas, encabezado y cuerpo. Como vemos en el ejemplo anterior.
+
+=== @Test
+
+Esta anotación denota que se trata de un 'test'.
+
+[source, java]
+----
+    @Test
+    void getAllClientsTest() {
+        testClient.get().uri("/v1/client/all")
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody(String.class).isEqualTo("Get all clients");
+    }
+----
+
+=== Conclusión
+---
+La ejecución de estos tests prueban el controlador de ejemplo que hemos creado, hay que pensar siempre en las 'responsabilidades' que tiene este para realizar unas buenos tests. A continuación, analizamos estas 'responsabilidades'.
+
+* El controlador debe responder a ciertas URLs, métodos HTTP y tipos de contenido.
+
+* El controlador debe analizar la solicitud HTTP entrante y crear objetos Java a partir de variables en la URL, los parámetros de solicitud HTTP y el cuerpo de la solicitud para que podamos trabajar con ellos en el código.
+
+* El controlador es la primera línea de defensa contra la entrada incorrecta, por lo que es un lugar donde podemos validar la entrada.
+
+* Después de analizar la entrada, el controlador debe transformar la entrada en el modelo esperado por la lógica de negocios y pasarla a la lógica de negocio.
+
+* El controlador toma la respuesta y la serializa en una respuesta HTTP.
+
+* Si se produce una excepción en algún lugar en el camino, el controlador debe traducirla en un mensaje de error significativo y un estado HTTP para el usuario.
+
+
+---
+Puede encontrar más información sobre los *controladores web* en la documentación de *{guide-darwin-controllers}* y en la *{quick-guide-spring-controllers}*.
+
+Todos los fragmentos de código mencionados en el artículo, se pueden encontrar en nuestro repositorio de {github-samples-webcontroller}.

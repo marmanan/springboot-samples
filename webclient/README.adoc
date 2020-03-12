@@ -1,0 +1,301 @@
+:doctype: book
+:sectnums:
+= Spring WebClient
+:toc:
+:toclevels: 3
+:toc-title: Índice
+
+:icons: font
+:figure-caption!:
+:imagesdir: images/
+
+:spring-documentation-webreactive: link:https://docs.spring.io/spring/docs/current/spring-framework-reference/web-reactive.html#webflux-client[Web Reactive : WebClient]
+:spring-documentation-webtestclient: link:https://docs.spring.io/spring/docs/current/spring-framework-reference/pdf/testing-webtestclient.pdf[WebTestClient]
+:spring-boot-guide-webclient: link:https://docs.spring.io/spring-boot/docs/current/reference/html/boot-features-webclient.html[36. Calling REST Services with WebClient]
+:github-samples-webclient: link:https://github.cloudcenterproduban.eu-de.bluemix.net/SANES-DARWIN-POC/darwin-samples/tree/develop/webclient[GitHub]
+
+== Introducción
+WebClient es un cliente web no bloqueante (reactivo) proporcionado por Spring WebFlux, para gestionar las solicitudes HTTP tanto en microservicios reactivos, como *NO reactivos*; recomendado su uso ya que su equivalente *"RestTemplate"*, como se menciona en el siguiente apartado, está completamente obsoleto y se deprecará en versiones futuras.
+
+Spring WebFlux depende directamente de Reactor Core para componer una lógica asincrónica y proporcionar el soporte necesario a los Reactive Streams. En general, la API de WebFlux devuelve un Flux o Mono (dado que se usan internamente) y aceptan cualquier Reactive Streams Publisher como entrada. El uso de Flux o del Mono es importante, porque ayuda a expresar la cardinalidad, por ejemplo, si se esperan valores asíncronos múltiples o únicos.
+
+Para las API funcionales (como WebClient), se aplican las reglas generales para las API de WebFlux; es decir, Flux y Mono como valores de retorno y Reactive Streams Publisher como entrada.
+
+Internamente, WebClient, delega el uso del cliente HTTP en otra librería. Por defecto, utiliza Reactor Netty, que ofrece clientes HTTP no bloqueantes basados en el framework Netty.
+
+== Clientes REST
+=== Cliente “RestTemplate”
+Durante mucho tiempo, Spring ha estado ofreciendo RestTemplate como una abstracción de un cliente web síncrono, basado en el modelo de thread por solicitud (thread-per-request). Este modelo conlleva que cada hilo (thread) consuma mucha cantidad de memoria y ciclos de CPU mientras se queda bloqueado.
+
+Por ello, a partir de la versión 5.0, Spring proporciona una alternativa moderna y asíncrona al RestTemplate; *quedando está completamente obsoleta y deprecada en versiones futuras*. Por ello, es completamente desaconsejable su uso en nuevos desarrollo, y se aconseja en aquellos desarrollos realizar su migración (ver <<migrate>>) al nuevo cliente web que Spring introduce en su versión 5.0.
+
+=== Cliente “WebClient”
+WebClient es un cliente reactivo, asíncrono y no bloqueante, para realizar solicitudes HTTP. Fue introducido en la versión 5.0 y es la alternativa moderna al RestTemplate.
+
+Mientras RestTemplate crea un nuevo hilo (thread) por cada solicitud HTTP, WebClient crea una "tarea” para cada solicitud, la cual es gestionada y ejecutada sólo cuando la respuesta esté disponible; consiguiendo así procesar más lógica utilizando menos hilos, y como consecuencia menos recursos del sistema.
+
+A diferencia de RestTemplate, WebClient permite:
+
+* Llamadas no bloqueantes (Non-blocking I/O).
+* Reactive Streams back pressure.
+* Alta concurrencia con menos recursos de hardware.
+* Una API fluida y de estilo funcional que aprovecha las expresiones lambda de Java 8.
+* Interacciones sincrónicas y asincrónicas.
+* Streaming up o streaming down desde un servidor.
+
+Internamente, WebClient por defecto utiliza la librería *Reactor Netty HttpClient* que ofrece *Reactor Netty*, aunque también soporta otras librerías, como *Jetty Reactive HttpClient*, u otros clientes haciendo uso de un *ClientHttpConnector*.
+
+== Configuración y Uso del WebClient
+=== Dependencias
+Para empezar, necesitaremos incluir la dependencia de arranque *Spring Boot WebFlux* en el POM:
+
+[source,xml]
+----
+<dependency>
+	<groupId>org.springframework.boot</groupId>
+	<artifactId>spring-boot-starter-webflux</artifactId>
+</dependency>
+----
+
+Es importante reseñar, que el propio arquetipo que proporciona *Framework de Darwin* pregunta por la inclusión del WebClient, añadiendo la dependencia correcta.
+
+[source,mvn]
+----
+mvn archetype:generate -DarchetypeGroupId=es.santander.darwin -DarchetypeArtifactId=darwin-spring-boot-archetype-microservice -DarchetypeVersion=2.3.2-RELEASE
+----
+
+image::archetype_generate.png[archetype_generate,align="center"]
+
+=== Configuración
+Aunque, la forma más sencilla de crear un *WebClient* es a través de uno de los métodos *estáticos de fábrica*:
+
+* WebClient.create()
+* WebClient.create(String baseUrl)
+
+Spring Boot crea y preconfigura un *_WebClient.Builder_* para su uso y el *Framework de Darwin* además, preconfigura este *_WebClient.Builder_* con varias cabeceras para autenticación, autorización y monitorización. Por parte de Spring se recomienda encarecidamente inyectarlo en nuestros componentes y utilizarlo para crear instancias de WebClient; ya que, una de las particularidades del WebClient es su inmutabilidad. Es por eso que se debe reutilizar el mismo ClientHttpConnector, permitiendo así compartir un pool de conexiones; siendo esto último lo más importante para el rendimiento. Esto significa que se debe intentar derivar todas las instancias de WebClient de la misma llamada WebClient.create(). Por ello, para facilitarnos la tarea y como ya se ha mencionado anteriormente, *Spring Boot* crear y configurar un bean de tipo builder (WebClient.Builder) que se puede inyectar en cualquier parte de nuestra aplicación.
+
+Un ejemplo típico:
+
+[source,java]
+----
+private final WebClient webClient;
+
+private static final String URL = "https://test-micro-reactive-san-narq-ref-dev.appls.boae.paas.gsnetcloud.corp/generic";
+
+public WebController (WebClient.Builder webClientBuilder) {
+	this.webClient = webClientBuilder.baseUrl(URL).build();
+}
+----
+
+Una vez creado, una instancia de *WebClient* es *inmutable*. Sin embargo, se puede clonar y crear una copia modificada sin afectar la instancia original, como muestra el siguiente ejemplo:
+
+[source,java]
+----
+WebClient webClient2 = this. webClient.mutate().filter(filterC).filter(filterD).build();
+----
+
+=== Retrieve
+La forma más fácil de obtener el *body* de una respuesta es utilizando el método *retrieve()*.
+
+[source,java]
+----
+public Mono<String> getStatusNonBlocking(@RequestHeader("Session-Id") String sessionId, @RequestParam(value = "status", defaultValue = "200") int status) {
+    return  this.webClient.get()
+                .uri("/status/{status}", status)
+                .header("Session-Id", sessionId)
+                .retrieve()
+                .onStatus(HttpStatus::is4xxClientError,
+                        response -> Mono.error(new HttpClientErrorException(response.statusCode())))
+                .onStatus(HttpStatus::is5xxServerError,
+                        response -> Mono.error(new HttpClientErrorException(response.statusCode())))
+                .bodyToMono(String.class);
+    }
+----
+
+=== Exchange
+Aunque el método *exchange()* proporciona más control que el método *retrive()*, no produce una señal de error en caso de una respuesta 4XX o 5XX. En este caso, se debe validar el estado de la respuesta y decidir cómo proceder. El siguiente ejemplo, es equivalente al anterior.
+
+[source,java]
+----
+public Mono<String> getStatusExchange (@RequestHeader("Session-Id") String sessionId, @RequestParam(value = "status", defaultValue = "200") int status) {
+    return  this.webClient.get()
+                .uri("/status/{status}", status)
+                .header("Session-Id", sessionId)
+                .exchange()
+                .flatMap(response -> {
+                    if (response.statusCode().is4xxClientError())
+                        return Mono.error(new HttpClientErrorException(response.statusCode()));
+                    if (response.statusCode().is5xxServerError())
+                        return Mono.error(new HttpClientErrorException(response.statusCode()));
+                    return response.bodyToMono(String.class);
+                });
+}
+----
+
+=== Uso síncrono del WebClient
+WebClient se puede usar de manera síncrona bloqueando al final del resultado; para ello es recomendable usar el método *toFuture()*, para obtener un *CompletableFuture* y representar un resultado futuro.
+
+Haciendo uso del método *get()* que nos proporciona el *CompletableFuture*  podemos bloquear el hilo actual hasta  obtener el resultado.
+
+[source,java]
+----
+CompletableFuture<String> result = this.webClient.get()
+        .retrieve()
+        .bodyToMono(String.class)
+        .toFuture();
+
+//...
+String response = result.get()
+----
+
+Otra manera, de utilizar WebClient como un cliente HTTP síncrono, es bloqueando el hilo directamente mediante el método *block()*.
+
+[source,java]
+----
+Mono<String> result = this.webClient.get()
+        .retrieve()
+        .bodyToMono(String.class);
+
+String response = result.block();
+----
+
+WARNING: Es aconsejable nunca bloquear un controlador de Spring MVC. Simplemente se debe devolver el Flux o Mono resultante del controlador.
+
+== WebTestClient
+
+Es el principal punto de entrada para probar cualquier servidor web a través de una conexión HTTP. *WebTestClient* proporciona una API idéntica a WebClient, y delega la mayor parte del trabajo a una instancia interna del WebClient, centrándose principalmente en proporcionar un contexto de prueba. Además, contiene métodos para verificar el estado de la respuesta, el encabezado y el cuerpo. También se pueden usar bibliotecas de “Assertions” como JUnit con WebTestClient.
+
+Para crear un WebTestClient, debe puede utilizar una de las varias opciones de configuración del servidor existentes. Una opción típica de configuración del servidor que permite conectarse a un servidor en ejecución, puede ser *bindToServer()*:
+
+[source,java]
+----
+@LocalServerPort
+protected int port;
+
+protected WebTestClient testClient;
+
+testClient = WebTestClient.bindToServer().baseUrl("http://localhost:" + port).build();
+----
+
+Además de las opciones de configuración descritas anteriormente, también, WebTestClient, te permite configurar las diferentes opciones de un cliente: URL base, encabezados predeterminados, filtros, etc... Estas opciones están fácilmente disponibles después del *bindToServer*; pero para el resto de configuraciones, se debe usar *configureClient()* para realizar la transición de la configuración del servidor al cliente.
+
+[source,java]
+----
+testClient = WebTestClient.bindToServer().baseUrl("http://localhost:" + port)
+                .responseTimeout(DURATION)
+                .defaultHeaders(headers -> {
+                    headers.add("Session-Id", "sessionId");
+                }).build();
+----
+
+Alternativamente, si quieres probar de forma rápida los controladores sin tener que configurar un servidor HTTP, Spring WebFlux permite configurar automáticamente un WebTestClient haciendo uso de las anotaciones *@AutoConfigureWebTestClient*  y *@Autowire* como muestra en el siguiente ejemplo:
+
+[souece, java]
+----
+@SpringBootTest(webEnvironment = WebEnvironment.RANDOM_PORT)
+@AutoConfigureWebTestClient
+public class WebControllerTest {
+
+    @Autowired
+    private WebTestClient testClient;
+----
+
+Como ya hemos mencionado, WebTestClient proporciona una API idéntica a WebClient hasta el punto de realizar una solicitud utilizando exchange(). Lo que sigue después de exchange(), es un flujo de trabajo encadenado para verificar las respuesta. Normalmente, comienza afirmando el estado de respuesta y los encabezados, de la siguiente manera:
+
+[source,java]
+----
+testClient.get().uri("/webclient/status-blocking")
+                .exchange()
+                .expectStatus()
+                .isOk();
+----
+
+Luego se especifica cómo decodificar y consumir el cuerpo de la respuesta:
+
+* *expectBody (Clase <T>)*: decodifica en un solo objeto.
+* *expectBodyList (Clase <T>)*: decodifica y recoge objetos en la Lista <T>.
+* *expectBody()*: decodifica en byte[] para contenido JSON o un body vacío.
+
+Donde se puede usar aserciones incorporadas para el cuerpo. El siguiente ejemplo muestra una forma de hacerlo:
+
+[source,java]
+----
+testClient.get().uri("/webclient/status-noblocking")
+                        .exchange()
+                        .expectStatus()
+                        .isOk()
+                        .expectBody(String.class).isEqualTo("Failed with 200");
+----
+
+También puede ir más allá de las aserciones incorporadas y crear unas propias haciendo uso del *.consumeWith*:
+
+[source,java]
+----
+testClient.get().uri("/webclient/status-noblocking-exchange")
+        .exchange()
+        .expectStatus()
+        .isOk()
+        .expectBody(String.class)
+        .consumeWith(r -> {
+            assertThat(r.getResponseBody()).contains("200");
+        });
+----
+
+Para más información de uso del WebTestClient, puede consultar la documentación de *Spring Boot Reference Guide* - {spring-documentation-webtestclient}
+
+== Migración de RestTemplate a WebClient [[migrate]]
+
+Veamos cómo migrar una aplicación de Spring Web MVC a Spring WebFlux:
+
+Dado, por ejemplo, un método que usa RestTemplate de tipo *GetMapping* para recuperar el *body* de un servicio externo:
+
+[source,java]
+----
+@Autowired
+private RestTemplate restTemplate;
+
+private static final String URL = "https://test-micro-reactive-san-narq-ref-dev.appls.boae.paas.gsnetcloud.corp/generic";
+
+@GetMapping("/status-blocking")
+public String getStatusBlocking(@RequestHeader("Session-Id") String sessionId, @RequestParam(value = "status", defaultValue = "200") int status) {
+    HttpHeaders headers = new HttpHeaders();
+    headers.set("Session-Id", sessionId);
+    HttpEntity entity = new HttpEntity(headers);
+
+    ResponseEntity<String> response = this.restTemplate.exchange(URL + "/status/" + status, HttpMethod.GET, entity, String.class);
+    HttpStatus statusCode = response.getStatusCode();
+    if (statusCode.is4xxClientError() || statusCode.is5xxServerError())
+        throw new HttpClientErrorException(statusCode);
+    return response.getBody();
+}
+----
+
+Si queremos usar la alternativa al RestTemplate que nos ofrece Spring WebFlux, debemos utilizar WebClient de la siguiente forma:
+
+[source,java]
+----
+private WebClient webClient;
+
+private static final String URL = "https://test-micro-reactive-san-narq-ref-dev.appls.boae.paas.gsnetcloud.corp/generic";
+
+public WebController(WebClient.Builder webClientBuilder) {
+    this.webClient= webClientBuilder.baseUrl(URL).build();
+}
+
+@GetMapping("/status-noblocking")
+public Mono<String> getStatusNonBlocking(@RequestHeader("Session-Id") String sessionId, @RequestParam(value = "status", defaultValue = "200") int status) {
+    return  this.webClient.get()
+                .uri("/status/{status}", status)
+                .header("Session-Id", sessionId)
+                .retrieve()
+                .onStatus(HttpStatus::is4xxClientError,
+                    response -> Mono.error(new HttpClientErrorException(response.statusCode())))
+                .onStatus(HttpStatus::is5xxServerError,
+                    response -> Mono.error(new HttpClientErrorException(response.statusCode())))
+                .bodyToMono(String.class);
+}
+----
+
+Puede encontrar más información sobre *WebClient* en la documentación de *Spring Boot Reference Guide:* {spring-boot-guide-webclient} y *Spring Framework Documentation:* {spring-documentation-webreactive}.
+
+Todos los fragmentos de código mencionados en el artículo, se pueden encontrar en nuestro repositorio de {github-samples-webclient}.

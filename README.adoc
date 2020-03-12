@@ -1,0 +1,29 @@
+:doctype: book
+:sectnums:
+
+= Arquitectura Darwin - Guías y ejemplos prácticos
+
+:icons: font
+:figure-caption!:
+
+:spring-documentation-webreactive: link:https://docs.spring.io/spring/docs/current/spring-framework-reference/web-reactive.html#webflux-client[Web Reactive : WebClient]
+:spring-boot-guide-webclient: link:https://docs.spring.io/spring-boot/docs/current/reference/html/boot-features-webclient.html[36. Calling REST Services with WebClient]
+:github-samples-webclient: link:https://github.cloudcenterproduban.eu-de.bluemix.net/SANES-DARWIN-POC/darwin-samples/tree/develop/webclient[GitHub]
+:darwin-spring-archetype-microservice: link:https://documentacion-san-narq-ref-dev.appls.boaw.paas.gsnetcloud.corp/darwin-archetypes/darwin-spring-boot-archetype-microservice/[Darwin Spring Boot Archetype Microservice]
+:github-samples-archetype: link:https://github.cloudcenterproduban.eu-de.bluemix.net/SANES-DARWIN-POC/darwin-samples/tree/develop/archetype[GitHub]
+
+
+==== link:\webclient\README.adoc[Spring WebClient]
+==== link:\resilience\README.adoc[Circuit Breaker - Resilience4J]
+==== link:\metrics\README.adoc[Librería de Métricas]
+==== link:\archetype\README.adoc[Arquetipo de microservicios]
+==== link:\partenon\README.adoc[Conector Partenon]
+==== link:\exception\README.adoc[Gestión de excepciones]
+==== link:\testing\README.adoc[Testing en Darwin]
+==== link:\railroadswitch\README.adoc[Railroad Switch]
+==== link:\webcontroller\README.adoc[Construcción de un controlador web con Spring MVC]
+==== link:\databasesql\README.adoc[Acceso a datos con una BBDD SQL]
+==== link:\mongodb\README.adoc[Acceso a datos con MongoDB]
+==== link:\reactivecontroller\README.adoc[Construcción de un controlador web con Spring Web Reactive]
+==== link:\cache\README.adoc[Uso de caché en Darwin]
+

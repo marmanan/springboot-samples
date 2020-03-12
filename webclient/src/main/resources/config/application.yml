@@ -1,0 +1,25 @@
+darwin:
+  app-key: darwin
+  logging:
+    log-level:
+      ROOT: ERROR
+    activity:
+      enable: false
+    system: darwin
+    subsystem: darwin
+    application: darwin
+    subapplication: webclient
+    paasproject: san-narq-ref-dev
+    paas-app-version: "@project.version@"
+    kafka:
+      server: ${env.logging-server}
+    reactive:
+      disable-hook: true
+
+  security:
+    pkm-endpoint:
+      - ${env.pkm-endpoint}
+    sts-endpoint:
+      - ${env.sts-endpoint}
+    white-list:
+      - /webclient/**
